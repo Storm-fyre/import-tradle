@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export Tradle</title>
+    <style>
+        /* --- CSS STYLES (Includes Mobile & Font Fixes) --- */
+        
+        /* Reset & Base */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f7f9; margin: 0; padding: 1rem; color: #333; }
+        .container { max-width: 1100px; margin: 0 auto; background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+
+        /* Header */
+        header { text-align: center; margin-bottom: 1rem; }
+        h1 { color: #2c3e50; margin: 0 0 5px 0; font-size: 2rem; }
+        .subtitle { color: #7f8c8d; font-size: 1rem; margin-bottom: 1rem; }
+
+        /* Stats Bar */
+        .game-status {
+            display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+            margin-bottom: 1rem; padding: 10px 15px; background: #f8f9fa;
+            border-radius: 8px; border: 1px solid #e1e4e8; font-size: 1.1rem; gap: 10px;
+        }
+        .total-export { font-weight: bold; color: #2c3e50; }
+        
+        /* Legend */
+        #legend { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 15px; min-height: 20px; }
+        .legend-item { width: 18px; height: 18px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; }
+
+        /* Chart */
+        #chart-wrapper { position: relative; width: 100%; margin-bottom: 1.5rem; }
+        #treemap-svg { width: 100%; background: #f0f0f0; border-radius: 4px; display: block; user-select: none; }
+
+        /* Controls */
+        #message-area { text-align: center; font-size: 1.3rem; font-weight: bold; margin-bottom: 15px; min-height: 30px; }
+        .win { color: #27ae60; }
+        .lose { color: #c0392b; }
+
+        .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 1rem; flex-wrap: wrap; }
+        input { padding: 12px; width: 300px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        button { padding: 12px 24px; background: #2c3e50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 16px; transition: background 0.2s; }
+        button:hover { background: #34495e; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #play-again-btn { background: #27ae60; display: none; }
+
+        /* History */
+        #guess-history { display: flex; flex-direction: column; gap: 8px; max-width: 600px; margin: 20px auto 0 auto; }
+        .history-row { display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #e1e4e8; padding: 10px 15px; border-radius: 6px; font-size: 0.95rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .history-name { font-weight: bold; color: #2c3e50; text-align: left; flex: 1; }
+        .history-dist { font-family: monospace; color: #7f8c8d; font-weight: 600; margin: 0 10px; }
+        .history-dir { font-size: 1.2rem; width: 30px; text-align: center; }
+
+        /* SVG Elements */
+        .section-group { transition: opacity 0.2s; }
+        .node-rect { stroke: #fff; stroke-width: 1px; transition: fill-opacity 0.1s; cursor: pointer; }
+        .node-rect:hover { fill-opacity: 0.85; }
+        
+        .node-text { 
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+            fill: white; 
+            pointer-events: none; 
+            /* Stronger shadow for readability on light colors */
+            text-shadow: 0 0 3px rgba(0,0,0,0.8), 0 1px 2px rgba(0,0,0,1); 
+            font-weight: 500; 
+        }
+        .node-percent { 
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+            fill: rgba(255,255,255,0.95); 
+            pointer-events: none; 
+            font-weight: 400;
+            text-shadow: 0 0 3px rgba(0,0,0,0.8);
+        }
+
+        /* Tooltip */
+        #tooltip { position: fixed; display: none; background: rgba(0, 0, 0, 0.95); color: #fff; padding: 10px 14px; border-radius: 4px; font-size: 14px; pointer-events: none; z-index: 1000; box-shadow: 0 4px 10px rgba(0,0,0,0.2); max-width: 250px; }
+        #tooltip strong { display: block; margin-bottom: 4px; color: #fff; font-size: 15px; }
+        #tooltip .sub { color: #ccc; font-size: 12px; margin-bottom: 2px; }
+
+        #loader { text-align: center; display: none; margin: 40px; font-size: 1.2rem; color: #2c3e50; }
+
+        /* Mobile Adjustments */
+        @media (max-width: 768px) {
+            body { padding: 0.5rem; }
+            .container { padding: 1rem; }
+            h1 { font-size: 1.6rem; }
+            .game-status { flex-direction: column; align-items: flex-start; }
+            .controls { flex-direction: column; }
+            input { width: 100%; box-sizing: border-box; }
+            button { width: 100%; padding: 15px; }
+            
+            #tooltip.mobile-fixed {
+                top: auto !important; bottom: 20px !important; left: 50% !important;
+                transform: translateX(-50%); width: 90%; max-width: none; text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1 id="game-title">Guess the Exporter</h1>
+        <div class="subtitle">Based on their exports (2022)</div>
+    </header>
+
+    <div class="game-status">
+        <div class="total-export" id="total-export-display">Total Exports: $--- B</div>
+        <div class="lives">Lives: <span id="lives-count">❤️❤️❤️❤️❤️</span></div>
+    </div>
+
+    <div id="loader">Loading Game Assets...</div>
+
+    <div id="game-area" style="display: none;">
+        <div id="legend"></div>
+        <div id="chart-wrapper">
+            <svg id="treemap-svg" viewBox="0 0 1000 500" preserveAspectRatio="none"></svg>
+        </div>
+
+        <div id="message-area"></div>
+
+        <div class="controls">
+            <input list="countries-datalist" id="guess-input" placeholder="Type a country name..." autocomplete="off">
+            <button id="guess-btn">GUESS</button>
+            <button id="play-again-btn">PLAY AGAIN</button>
+        </div>
+
+        <div id="guess-history"></div>
+    </div>
+</div>
+
+<div id="tooltip"></div>
+<datalist id="countries-datalist"></datalist>
+
+<script>
+// --- GLOBAL VARIABLES (Populated via Fetch) ---
+let DISTANCES = {};
+let DIRECTIONS = {};
+
+// --- CONFIGURATION ---
+const API_BASE = "https://api-v2.oec.world/tesseract/data.jsonrecords";
+const CUBE = "trade_i_baci_a_22";
+
+const SECTION_MAPPING = [
+    { id: 1, name: "Livestock & Animal Produce", color: "#F0E68C", chapters: [1, 2, 3, 4, 5] },
+    { id: 2, name: "Crops", color: "#FDC02F", chapters: [6, 7, 8, 9, 10, 11, 12, 13, 14] },
+    { id: 3, name: "Animal & Vegetable Oils", color: "#E89736", chapters: [15] },
+    { id: 4, name: "Processed Foods", color: "#E4772E", chapters: [16, 17, 18, 19, 20, 21, 22, 23, 24] },
+    { id: 5, name: "Minerals, Fuels & Ores", color: "#6C4F3E", chapters: [25, 26, 27] },
+    { id: 6, name: "Chemicals", color: "#CF4E96", chapters: [28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38] },
+    { id: 7, name: "Plastics & Rubbers", color: "#954492", chapters: [39, 40] },
+    { id: 8, name: "Leather & Furs", color: "#B3C148", chapters: [41, 42, 43] },
+    { id: 9, name: "Wood Products", color: "#5AA453", chapters: [44, 45, 46] },
+    { id: 10, name: "Paper & Pulp", color: "#3B7D41", chapters: [47, 48, 49] },
+    { id: 11, name: "Textiles", color: "#3D9896", chapters: Array.from({length: 14}, (_, i) => i + 50) },
+    { id: 12, name: "Footwear", color: "#326C74", chapters: [64, 65, 66, 67] },
+    { id: 13, name: "Stone & Glass", color: "#925255", chapters: [68, 69, 70] },
+    { id: 14, name: "Precious Metals", color: "#B82F3B", chapters: [71] },
+    { id: 15, name: "Metals", color: "#D15438", chapters: Array.from({length: 12}, (_, i) => i + 72) },
+    { id: 16, name: "Electronics & Machines", color: "#42A5F5", chapters: [84, 85] },
+    { id: 17, name: "Transportation", color: "#1976D2", chapters: [86, 87, 88, 89] },
+    { id: 18, name: "Instruments", color: "#1565C0", chapters: [90, 91, 92] },
+    { id: 19, name: "Arms", color: "#546E7A", chapters: [93] },
+    { id: 20, name: "Misc", color: "#8D8D8D", chapters: [94, 95, 96] },
+    { id: 21, name: "Arts", color: "#616161", chapters: [97, 98, 99] }
+];
+
+const COUNTRIES = [
+    { "name": "Afghanistan", "id": "asafg" }, { "name": "Albania", "id": "eualb" }, { "name": "Algeria", "id": "afdza" },
+    { "name": "Angola", "id": "afago" }, { "name": "Argentina", "id": "saarg" }, { "name": "Australia", "id": "ocaus" },
+    { "name": "Austria", "id": "euaut" }, { "name": "Bangladesh", "id": "asbgd" }, { "name": "Belgium", "id": "eubel" },
+    { "name": "Brazil", "id": "sabra" }, { "name": "Canada", "id": "nacan" }, { "name": "Chile", "id": "sachl" },
+    { "name": "China", "id": "aschn" }, { "name": "Colombia", "id": "sacol" }, { "name": "Congo (Dem. Rep.)", "id": "afcod" },
+    { "name": "Costa Rica", "id": "nacri" }, { "name": "Croatia", "id": "euhrv" }, { "name": "Czech Republic", "id": "eucze" },
+    { "name": "Denmark", "id": "eudnk" }, { "name": "Egypt", "id": "afegy" }, { "name": "Finland", "id": "eufin" },
+    { "name": "France", "id": "eufra" }, { "name": "Germany", "id": "eudeu" }, { "name": "Greece", "id": "eugrc" },
+    { "name": "Hong Kong", "id": "ashkg" }, { "name": "Hungary", "id": "euhun" }, { "name": "India", "id": "asind" },
+    { "name": "Indonesia", "id": "asidn" }, { "name": "Iran", "id": "asirn" }, { "name": "Iraq", "id": "asirq" },
+    { "name": "Ireland", "id": "euirl" }, { "name": "Israel", "id": "asisr" }, { "name": "Italy", "id": "euita" },
+    { "name": "Japan", "id": "asjpn" }, { "name": "Kazakhstan", "id": "askaz" }, { "name": "Kenya", "id": "afken" },
+    { "name": "Kuwait", "id": "askwt" }, { "name": "Malaysia", "id": "asmys" }, { "name": "Mexico", "id": "namex" },
+    { "name": "Morocco", "id": "afmar" }, { "name": "Netherlands", "id": "eunld" }, { "name": "New Zealand", "id": "ocnzl" },
+    { "name": "Nigeria", "id": "afnga" }, { "name": "Norway", "id": "eunor" }, { "name": "Pakistan", "id": "aspak" },
+    { "name": "Peru", "id": "saper" }, { "name": "Philippines", "id": "asphl" }, { "name": "Poland", "id": "eupol" },
+    { "name": "Portugal", "id": "euprt" }, { "name": "Qatar", "id": "asqat" }, { "name": "Romania", "id": "eurou" },
+    { "name": "Russia", "id": "eurus" }, { "name": "Saudi Arabia", "id": "assau" }, { "name": "Singapore", "id": "assgp" },
+    { "name": "South Africa", "id": "afzaf" }, { "name": "South Korea", "id": "askor" }, { "name": "Spain", "id": "euesp" },
+    { "name": "Sweden", "id": "euswe" }, { "name": "Switzerland", "id": "euche" }, { "name": "Taiwan", "id": "astwn" },
+    { "name": "Thailand", "id": "astha" }, { "name": "Turkey", "id": "astur" }, { "name": "Ukraine", "id": "euukr" },
+    { "name": "United Arab Emirates", "id": "asare" }, { "name": "United Kingdom", "id": "eugbr" },
+    { "name": "United States", "id": "nausa" }, { "name": "Vietnam", "id": "asvnm" }
+];
+
+const REVERSE_COMPASS = {
+    "N": "S", "S": "N", "E": "W", "W": "E",
+    "NE": "SW", "NW": "SE", "SE": "NW", "SW": "NE"
+};
+
+const ARROW_MAP = {
+    "N": "⬆️", "S": "⬇️", "E": "➡️", "W": "⬅️",
+    "NE": "↗️", "NW": "↖️", "SE": "↘️", "SW": "↙️"
+};
+
+const datalist = document.getElementById('countries-datalist');
+COUNTRIES.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.name;
+    datalist.appendChild(opt);
+});
+
+// --- GAME STATE ---
+let targetCountry = null;
+let lives = 5;
+let isGameOver = false;
+
+// --- INITIALIZATION ---
+// This function loads the external JSON files before starting the game
+async function startApp() {
+    try {
+        document.getElementById('loader').style.display = 'block';
+        document.getElementById('loader').textContent = "Loading Game Assets...";
+
+        const [distRes, dirRes] = await Promise.all([
+            fetch('distances.json'),
+            fetch('directions.json')
+        ]);
+
+        if (!distRes.ok || !dirRes.ok) throw new Error("Failed to load JSON files");
+
+        DISTANCES = await distRes.json();
+        DIRECTIONS = await dirRes.json();
+
+        initGame();
+    } catch (err) {
+        document.getElementById('loader').innerHTML = 
+            `Error loading game files.<br>Ensure distances.json and directions.json are in the same folder.<br>${err.message}`;
+    }
+}
+
+// Start the loading process
+startApp();
+
+function initGame() {
+    lives = 5;
+    isGameOver = false;
+    document.getElementById('lives-count').textContent = "❤️".repeat(lives);
+    document.getElementById('guess-history').innerHTML = "";
+    document.getElementById('game-title').textContent = "Guess the Exporter";
+    document.getElementById('game-title').style.color = "#2c3e50";
+    document.getElementById('message-area').textContent = "";
+    document.getElementById('message-area').className = "";
+    document.getElementById('guess-input').value = "";
+    document.getElementById('guess-input').disabled = false;
+    document.getElementById('guess-btn').style.display = "inline-block";
+    document.getElementById('play-again-btn').style.display = "none";
+    document.getElementById('game-area').style.display = 'none';
+    document.getElementById('loader').style.display = 'block';
+    document.getElementById('loader').textContent = "Fetching Mystery Data...";
+    document.getElementById('total-export-display').textContent = "Total Exports: $--- B";
+
+    const randomIndex = Math.floor(Math.random() * COUNTRIES.length);
+    targetCountry = COUNTRIES[randomIndex];
+
+    fetchDataForCountry(targetCountry);
+}
+
+document.getElementById('guess-btn').addEventListener('click', handleGuess);
+document.getElementById('play-again-btn').addEventListener('click', initGame);
+document.getElementById('guess-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleGuess();
+});
+
+function handleGuess() {
+    if (isGameOver) return;
+    const input = document.getElementById('guess-input');
+    const val = input.value.trim();
+    if (!val) return;
+
+    const validCountry = COUNTRIES.find(c => c.name.toLowerCase() === val.toLowerCase());
+    if (!validCountry) {
+        alert("Please select a valid country from the list.");
+        return;
+    }
+
+    if (val.toLowerCase() === targetCountry.name.toLowerCase()) {
+        endGame(true);
+    } else {
+        lives--;
+        updateStatus(val);
+        input.value = "";
+        if (lives <= 0) endGame(false);
+    }
+}
+
+function updateStatus(guessedName) {
+    document.getElementById('lives-count').textContent = "❤️".repeat(lives);
+
+    const historyContainer = document.getElementById('guess-history');
+    const row = document.createElement('div');
+    row.className = 'history-row';
+
+    const guessKey = guessedName.toLowerCase();
+    const targetKey = targetCountry.name.toLowerCase();
+
+    let distText = "N/A";
+    let arrowText = "";
+
+    if (DISTANCES[guessKey] && DISTANCES[guessKey][targetKey] !== undefined) {
+        const distVal = DISTANCES[guessKey][targetKey];
+        distText = Math.round(distVal).toLocaleString() + " km";
+    }
+
+    if (DIRECTIONS[guessKey] && DIRECTIONS[guessKey][targetKey]) {
+        const rawDir = DIRECTIONS[guessKey][targetKey];
+        const correctDir = REVERSE_COMPASS[rawDir] || rawDir;
+        arrowText = ARROW_MAP[correctDir] || "";
+    }
+
+    row.innerHTML = `
+        <span class="history-name">${guessedName}</span>
+        <span class="history-dist">${distText}</span>
+        <span class="history-dir">${arrowText}</span>
+    `;
+
+    historyContainer.appendChild(row);
+}
+
+function endGame(win) {
+    isGameOver = true;
+    const msgArea = document.getElementById('message-area');
+    const title = document.getElementById('game-title');
+    const input = document.getElementById('guess-input');
+
+    input.disabled = true;
+    document.getElementById('guess-btn').style.display = "none";
+    document.getElementById('play-again-btn').style.display = "inline-block";
+
+    if (win) {
+        msgArea.textContent = "You Won!";
+        msgArea.className = "win";
+        title.textContent = targetCountry.name;
+        title.style.color = "#27ae60";
+    } else {
+        msgArea.textContent = "Game Over! Answer: " + targetCountry.name;
+        msgArea.className = "lose";
+        title.textContent = targetCountry.name;
+        title.style.color = "#c0392b";
+    }
+}
+
+async function fetchDataForCountry(country) {
+    try {
+        const hs2Url = `${API_BASE}?cube=${CUBE}&drilldowns=HS2,Exporter+Country&measures=Trade+Value&include=Exporter+Country:${country.id}&time=Year.latest`;
+        const hs2Res = await fetch(hs2Url);
+        const hs2Data = (await hs2Res.json()).data;
+
+        const hs4Url = `${API_BASE}?cube=${CUBE}&drilldowns=HS4,Exporter+Country&measures=Trade+Value&include=Exporter+Country:${country.id}&time=Year.latest&limit=10000`;
+        const hs4Res = await fetch(hs4Url);
+        const hs4Data = (await hs4Res.json()).data;
+
+        processData(hs2Data, hs4Data);
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('game-area').style.display = 'block';
+    } catch (err) {
+        document.getElementById('loader').innerHTML = `Error: ${err.message}. <br><button onclick="initGame()">Try Another Country</button>`;
+    }
+}
+
+function processData(hs2Data, hs4Data) {
+    const globalTotal = hs4Data.reduce((sum, item) => sum + item["Trade Value"], 0);
+
+    const billions = (globalTotal / 1000000000).toFixed(2);
+    document.getElementById('total-export-display').textContent = `Total Exports: $${billions} B`;
+
+    const threshold = globalTotal * 0.002;
+    const sectionStats = SECTION_MAPPING.map(s => ({ ...s, value: 0, items: [] }));
+
+    hs2Data.forEach(item => {
+        const idStr = item["HS2 ID"].toString();
+        let chapter = parseInt(idStr.slice(-2));
+        const section = sectionStats.find(s => s.chapters.includes(chapter));
+        if (section) section.value += item["Trade Value"];
+    });
+
+    hs4Data.forEach(item => {
+        const idStr = item["HS4 ID"].toString();
+        const paddedId = idStr.padStart(4, '0');
+        const hs4Code = paddedId.slice(-4);
+        const chapter = parseInt(hs4Code.substring(0, 2));
+        const section = sectionStats.find(s => s.chapters.includes(chapter));
+        if (section) {
+            section.items.push({ code: item["HS4 ID"], name: item["HS4"], value: item["Trade Value"] });
+        }
+    });
+
+    const finalTreeData = [];
+    sectionStats.forEach(s => {
+        if (s.value === 0) return;
+        const mainItems = [];
+        let otherVal = 0;
+        s.items.forEach(i => {
+            if (i.value >= threshold) mainItems.push(i);
+            else otherVal += i.value;
+        });
+        const hs4Sum = s.items.reduce((acc, i) => acc + i.value, 0);
+        const discrepancy = s.value - hs4Sum;
+        if (discrepancy > 0) otherVal += discrepancy;
+        if (otherVal > 0) mainItems.push({ code: "OTH", name: "Other " + s.name, value: otherVal, isOther: true });
+
+        finalTreeData.push({ id: s.id, name: s.name, value: s.value, color: s.color, children: mainItems });
+    });
+
+    generateChart(finalTreeData, globalTotal);
+}
+
+// --- TREEMAP LAYOUT ENGINE ---
+class TreemapLayout {
+    constructor(width, height) {
+        this.width = width;
+        this.height = height;
+    }
+    calculate(data) {
+        const sortedData = [...data].sort((a, b) => b.value - a.value);
+        const totalValue = sortedData.reduce((sum, item) => sum + item.value, 0);
+        const totalArea = this.width * this.height;
+        const itemsWithArea = sortedData.map(item => ({
+            ...item,
+            area: (item.value / totalValue) * totalArea
+        }));
+        return this.squarify(itemsWithArea, [], { x: 0, y: 0, w: this.width, h: this.height });
+    }
+    squarify(children, row, container) {
+        if (children.length === 0) return this.layoutRow(row, container);
+        const shortestSide = Math.min(container.w, container.h);
+        const c = children[0];
+        if (this.worstRatio(row, shortestSide) >= this.worstRatio([...row, c], shortestSide)) {
+            return this.squarify(children.slice(1), [...row, c], container);
+        } else {
+            const laidOut = this.layoutRow(row, container);
+            const rowArea = row.reduce((sum, x) => sum + x.area, 0);
+            const thickness = rowArea / shortestSide;
+            let newContainer;
+            if (container.w >= container.h) {
+                newContainer = { x: container.x + thickness, y: container.y, w: container.w - thickness, h: container.h };
+            } else {
+                newContainer = { x: container.x, y: container.y + thickness, w: container.w, h: container.h - thickness };
+            }
+            return [...laidOut, ...this.squarify(children, [], newContainer)];
+        }
+    }
+    worstRatio(row, width) {
+        if (!row.length) return Number.MAX_VALUE;
+        const totalArea = row.reduce((sum, c) => sum + c.area, 0);
+        const minArea = row[row.length - 1].area;
+        const maxArea = row[0].area;
+        const s = totalArea;
+        const w = width;
+        return Math.max((w * w * maxArea) / (s * s), (s * s) / (w * w * minArea));
+    }
+    layoutRow(row, container) {
+        if (!row.length) return [];
+        const totalArea = row.reduce((sum, c) => sum + c.area, 0);
+        const shortestSide = Math.min(container.w, container.h);
+        const thickness = totalArea / shortestSide;
+        let currentOffset = 0;
+        const result = [];
+        row.forEach(item => {
+            let itemW, itemH, itemX, itemY;
+            if (container.w >= container.h) {
+                itemW = thickness;
+                itemH = item.area / itemW;
+                itemX = container.x;
+                itemY = container.y + currentOffset;
+                currentOffset += itemH;
+            } else {
+                itemH = thickness;
+                itemW = item.area / itemH;
+                itemX = container.x + currentOffset;
+                itemY = container.y;
+                currentOffset += itemW;
+            }
+            result.push({ ...item, x: itemX, y: itemY, w: itemW, h: itemH });
+        });
+        return result;
+    }
+}
+
+function generateChart(data, globalTotal) {
+    const svg = document.getElementById('treemap-svg');
+    const legend = document.getElementById('legend');
+    svg.innerHTML = '';
+    legend.innerHTML = '';
+
+    // --- RESPONSIVE LOGIC ---
+    const isMobile = window.innerWidth < 768;
+    const width = 1000; 
+    const height = isMobile ? 1200 : 500; 
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+    const layoutEngine = new TreemapLayout(width, height);
+    const sectionLayout = layoutEngine.calculate(data);
+
+    sectionLayout.forEach(sectionRect => {
+        // Legend Item
+        const legItem = document.createElement('div');
+        legItem.className = 'legend-item';
+        legItem.style.backgroundColor = sectionRect.color;
+        
+        legItem.onmouseenter = (e) => {
+            document.querySelectorAll('.section-group').forEach(g => g.style.opacity = '0.1');
+            document.getElementById(`group-${sectionRect.id}`).style.opacity = '1';
+            showTooltip(e, { name: sectionRect.name, value: sectionRect.value }, globalTotal, "Section Group");
+        };
+        legItem.onmousemove = (e) => showTooltip(e, { name: sectionRect.name, value: sectionRect.value }, globalTotal, "Section Group");
+        legItem.onmouseleave = () => {
+            document.querySelectorAll('.section-group').forEach(g => g.style.opacity = '1');
+            hideTooltip();
+        };
+        legend.appendChild(legItem);
+
+        // Children Layout
+        const subEngine = new TreemapLayout(sectionRect.w, sectionRect.h);
+        const childrenLayout = subEngine.calculate(sectionRect.children);
+
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.setAttribute("class", "section-group");
+        g.setAttribute("id", `group-${sectionRect.id}`);
+        g.setAttribute("transform", `translate(${sectionRect.x}, ${sectionRect.y})`);
+
+        childrenLayout.forEach(child => {
+            const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            rect.setAttribute("x", child.x);
+            rect.setAttribute("y", child.y);
+            rect.setAttribute("width", child.w);
+            rect.setAttribute("height", child.h);
+            rect.setAttribute("fill", sectionRect.color);
+            rect.setAttribute("fill-opacity", child.isOther ? "0.6" : "1");
+            rect.setAttribute("class", "node-rect");
+
+            const handleInteraction = (e) => showTooltip(e, child, globalTotal, sectionRect.name);
+            rect.addEventListener('mousemove', handleInteraction);
+            rect.addEventListener('click', handleInteraction);
+            rect.addEventListener('mouseleave', hideTooltip);
+            g.appendChild(rect);
+
+            // --- TEXT RENDERING WITH TIERS ---
+            
+            // Tier 1: Too small for anything
+            if (child.w < 35 || child.h < 25) return;
+
+            // Font Size Logic
+            let fontSize = Math.min(14, child.w / 6, child.h / 2.5);
+            if (fontSize < 10) return; 
+
+            // Truncation
+            const charCapacity = Math.floor((child.w - 4) / (fontSize * 0.6));
+            let displayName = child.name;
+            if (displayName.length > charCapacity) {
+                displayName = displayName.substring(0, charCapacity - 1) + "..";
+            }
+
+            const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            text.setAttribute("x", child.x + child.w / 2);
+            text.setAttribute("y", child.y + child.h / 2);
+            text.setAttribute("text-anchor", "middle");
+            text.setAttribute("dominant-baseline", "middle");
+
+            // Tier 2 vs Tier 3: Height Check for Percentage
+            const showPercent = child.h > 45;
+
+            const nameNode = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+            nameNode.setAttribute("x", child.x + child.w / 2);
+            nameNode.setAttribute("dy", showPercent ? "-0.3em" : "0.1em"); 
+            nameNode.setAttribute("font-size", fontSize);
+            nameNode.setAttribute("class", "node-text");
+            nameNode.textContent = displayName;
+            text.appendChild(nameNode);
+
+            if (showPercent) {
+                const percent = ((child.value / globalTotal) * 100).toFixed(1) + "%";
+                const pctNode = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                pctNode.setAttribute("x", child.x + child.w / 2);
+                pctNode.setAttribute("dy", "1.2em");
+                pctNode.setAttribute("font-size", fontSize * 0.85);
+                pctNode.setAttribute("class", "node-percent");
+                pctNode.textContent = percent;
+                text.appendChild(pctNode);
+            }
+
+            g.appendChild(text);
+        });
+        svg.appendChild(g);
+    });
+}
+
+function showTooltip(e, data, total, sectionName) {
+    const tt = document.getElementById('tooltip');
+    const pct = ((data.value / total) * 100).toFixed(2);
+    
+    let valStr;
+    if (data.value >= 1e9) valStr = "$" + (data.value / 1e9).toFixed(2) + " B";
+    else valStr = "$" + (data.value / 1e6).toFixed(0) + " M";
+
+    tt.innerHTML = `
+        <div class="sub">${sectionName}</div>
+        <strong>${data.name}</strong>
+        <div>${valStr}</div>
+        <div style="margin-top:4px; font-weight:bold; color:#ffd700;">${pct}% of Total</div>
+    `;
+    tt.style.display = 'block';
+
+    if (window.innerWidth < 768) {
+        tt.classList.add('mobile-fixed');
+        tt.style.left = '';
+        tt.style.top = '';
+    } else {
+        tt.classList.remove('mobile-fixed');
+        const x = e.clientX;
+        const y = e.clientY;
+        let left = x + 15;
+        let top = y + 15;
+        if (left + 220 > window.innerWidth) left = x - 230;
+        if (top + 100 > window.innerHeight) top = y - 110;
+        tt.style.left = left + 'px';
+        tt.style.top = top + 'px';
+    }
+}
+
+function hideTooltip() {
+    document.getElementById('tooltip').style.display = 'none';
+}
+</script>
+</body>
+</html>
