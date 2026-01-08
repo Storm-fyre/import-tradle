@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Export Tradle</title>
+    <title>Import Tradle</title>
     <style>
-        /* --- CSS STYLES (Includes Mobile & Font Fixes) --- */
+        /* --- CSS STYLES (Identical to Export Version) --- */
         
         /* Reset & Base */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f7f9; margin: 0; padding: 1rem; color: #333; }
@@ -22,7 +22,7 @@
             margin-bottom: 1rem; padding: 10px 15px; background: #f8f9fa;
             border-radius: 8px; border: 1px solid #e1e4e8; font-size: 1.1rem; gap: 10px;
         }
-        .total-export { font-weight: bold; color: #2c3e50; }
+        .total-stat { font-weight: bold; color: #2c3e50; }
         
         /* Legend */
         #legend { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 15px; min-height: 20px; }
@@ -60,7 +60,6 @@
             font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
             fill: white; 
             pointer-events: none; 
-            /* Stronger shadow for readability on light colors */
             text-shadow: 0 0 3px rgba(0,0,0,0.8), 0 1px 2px rgba(0,0,0,1); 
             font-weight: 500; 
         }
@@ -100,12 +99,12 @@
 
 <div class="container">
     <header>
-        <h1 id="game-title">Guess the Exporter</h1>
-        <div class="subtitle">Based on their exports (2022)</div>
+        <h1 id="game-title">Guess the Importer</h1>
+        <div class="subtitle">Based on their imports (2022)</div>
     </header>
 
     <div class="game-status">
-        <div class="total-export" id="total-export-display">Total Exports: $--- B</div>
+        <div class="total-stat" id="total-stat-display">Total Imports: $--- B</div>
         <div class="lives">Lives: <span id="lives-count">❤️❤️❤️❤️❤️</span></div>
     </div>
 
@@ -133,7 +132,7 @@
 <datalist id="countries-datalist"></datalist>
 
 <script>
-// --- GLOBAL VARIABLES (Populated via Fetch) ---
+// --- GLOBAL VARIABLES ---
 let DISTANCES = {};
 let DIRECTIONS = {};
 
@@ -214,7 +213,6 @@ let lives = 5;
 let isGameOver = false;
 
 // --- INITIALIZATION ---
-// This function loads the external JSON files before starting the game
 async function startApp() {
     try {
         document.getElementById('loader').style.display = 'block';
@@ -237,7 +235,6 @@ async function startApp() {
     }
 }
 
-// Start the loading process
 startApp();
 
 function initGame() {
@@ -245,7 +242,7 @@ function initGame() {
     isGameOver = false;
     document.getElementById('lives-count').textContent = "❤️".repeat(lives);
     document.getElementById('guess-history').innerHTML = "";
-    document.getElementById('game-title').textContent = "Guess the Exporter";
+    document.getElementById('game-title').textContent = "Guess the Importer";
     document.getElementById('game-title').style.color = "#2c3e50";
     document.getElementById('message-area').textContent = "";
     document.getElementById('message-area').className = "";
@@ -256,7 +253,7 @@ function initGame() {
     document.getElementById('game-area').style.display = 'none';
     document.getElementById('loader').style.display = 'block';
     document.getElementById('loader').textContent = "Fetching Mystery Data...";
-    document.getElementById('total-export-display').textContent = "Total Exports: $--- B";
+    document.getElementById('total-stat-display').textContent = "Total Imports: $--- B";
 
     const randomIndex = Math.floor(Math.random() * COUNTRIES.length);
     targetCountry = COUNTRIES[randomIndex];
@@ -350,11 +347,12 @@ function endGame(win) {
 
 async function fetchDataForCountry(country) {
     try {
-        const hs2Url = `${API_BASE}?cube=${CUBE}&drilldowns=HS2,Exporter+Country&measures=Trade+Value&include=Exporter+Country:${country.id}&time=Year.latest`;
+        // --- CHANGED TO IMPORTER ENDPOINTS ---
+        const hs2Url = `${API_BASE}?cube=${CUBE}&drilldowns=HS2,Importer+Country&measures=Trade+Value&include=Importer+Country:${country.id}&time=Year.latest`;
         const hs2Res = await fetch(hs2Url);
         const hs2Data = (await hs2Res.json()).data;
 
-        const hs4Url = `${API_BASE}?cube=${CUBE}&drilldowns=HS4,Exporter+Country&measures=Trade+Value&include=Exporter+Country:${country.id}&time=Year.latest&limit=10000`;
+        const hs4Url = `${API_BASE}?cube=${CUBE}&drilldowns=HS4,Importer+Country&measures=Trade+Value&include=Importer+Country:${country.id}&time=Year.latest&limit=10000`;
         const hs4Res = await fetch(hs4Url);
         const hs4Data = (await hs4Res.json()).data;
 
@@ -370,7 +368,7 @@ function processData(hs2Data, hs4Data) {
     const globalTotal = hs4Data.reduce((sum, item) => sum + item["Trade Value"], 0);
 
     const billions = (globalTotal / 1000000000).toFixed(2);
-    document.getElementById('total-export-display').textContent = `Total Exports: $${billions} B`;
+    document.getElementById('total-stat-display').textContent = `Total Imports: $${billions} B`;
 
     const threshold = globalTotal * 0.002;
     const sectionStats = SECTION_MAPPING.map(s => ({ ...s, value: 0, items: [] }));
@@ -413,7 +411,7 @@ function processData(hs2Data, hs4Data) {
     generateChart(finalTreeData, globalTotal);
 }
 
-// --- TREEMAP LAYOUT ENGINE ---
+// --- TREEMAP LAYOUT ENGINE (SAME AS BEFORE) ---
 class TreemapLayout {
     constructor(width, height) {
         this.width = width;
@@ -491,7 +489,6 @@ function generateChart(data, globalTotal) {
     svg.innerHTML = '';
     legend.innerHTML = '';
 
-    // --- RESPONSIVE LOGIC ---
     const isMobile = window.innerWidth < 768;
     const width = 1000; 
     const height = isMobile ? 1200 : 500; 
@@ -501,7 +498,7 @@ function generateChart(data, globalTotal) {
     const sectionLayout = layoutEngine.calculate(data);
 
     sectionLayout.forEach(sectionRect => {
-        // Legend Item
+        // Legend
         const legItem = document.createElement('div');
         legItem.className = 'legend-item';
         legItem.style.backgroundColor = sectionRect.color;
@@ -518,7 +515,7 @@ function generateChart(data, globalTotal) {
         };
         legend.appendChild(legItem);
 
-        // Children Layout
+        // Children
         const subEngine = new TreemapLayout(sectionRect.w, sectionRect.h);
         const childrenLayout = subEngine.calculate(sectionRect.children);
 
@@ -543,16 +540,12 @@ function generateChart(data, globalTotal) {
             rect.addEventListener('mouseleave', hideTooltip);
             g.appendChild(rect);
 
-            // --- TEXT RENDERING WITH TIERS ---
-            
-            // Tier 1: Too small for anything
+            // Text Logic (Tiers)
             if (child.w < 35 || child.h < 25) return;
 
-            // Font Size Logic
             let fontSize = Math.min(14, child.w / 6, child.h / 2.5);
             if (fontSize < 10) return; 
 
-            // Truncation
             const charCapacity = Math.floor((child.w - 4) / (fontSize * 0.6));
             let displayName = child.name;
             if (displayName.length > charCapacity) {
@@ -565,7 +558,6 @@ function generateChart(data, globalTotal) {
             text.setAttribute("text-anchor", "middle");
             text.setAttribute("dominant-baseline", "middle");
 
-            // Tier 2 vs Tier 3: Height Check for Percentage
             const showPercent = child.h > 45;
 
             const nameNode = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
